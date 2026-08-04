@@ -1,0 +1,3 @@
+target_url: "http://dominik-chyziak.pl"
+timeout: "5s"
+concurrency: 200
