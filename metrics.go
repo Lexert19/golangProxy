@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,12 +38,14 @@ type MetricsTracker struct {
 	totalCheckDuration int64
 	activeWorkers      int64
 	workingProxies     []Proxy
+	proxySet           map[string]bool 
 }
 
 func NewMetricsTracker() *MetricsTracker {
 	return &MetricsTracker{
 		programStartTime: time.Now(),
 		workingProxies:   make([]Proxy, 0),
+		proxySet:         make(map[string]bool),
 	}
 }
 
@@ -54,6 +57,8 @@ func (m *MetricsTracker) StartRun(totalProxies int) {
 	m.checkedCount = 0
 	m.remainingCount = int64(totalProxies)
 	m.workingCount = 0
+	m.proxySet = make(map[string]bool)
+    m.workingProxies = make([]Proxy, 0)
 }
 
 func (m *MetricsTracker) FinishRun() {
@@ -74,9 +79,13 @@ func (m *MetricsTracker) RecordCheck(p Proxy, err error, duration time.Duration)
 	atomic.AddInt64(&m.totalCheckDuration, int64(duration))
 
 	if err == nil {
-		m.workingCount++
-		m.successCount++
-		m.workingProxies = append(m.workingProxies, p)
+		key := fmt.Sprintf("%s:%d", p.IP, p.Port)
+        if !m.proxySet[key] {
+            m.proxySet[key] = true
+            m.workingCount++
+            m.successCount++
+            m.workingProxies = append(m.workingProxies, p)
+		}
 	} else {
 		m.errorCount++
 	}
