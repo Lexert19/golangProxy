@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type Fetcher interface {
@@ -187,15 +190,26 @@ func NewMultiFetcher(fetchers ...Fetcher) *MultiFetcher {
 
 func (m *MultiFetcher) Fetch(ctx context.Context) ([]Proxy, error) {
 	var allProxies []Proxy
+	var mu sync.Mutex
+
+	g, gCtx := errgroup.WithContext(ctx)
 
 	for _, fetcher := range m.fetchers {
-		proxies, err := fetcher.Fetch(ctx)
-		if err != nil {
-			fmt.Printf("Fetcher error: %v\n", err)
-			continue
-		}
-		allProxies = append(allProxies, proxies...)
+		f := fetcher
+		g.Go(func() error {
+			proxies, err := f.Fetch(gCtx)
+			if err != nil {
+				fmt.Printf("Fetcher error: %v\n", err)
+				return nil
+			}
+
+			mu.Lock()
+			allProxies = append(allProxies, proxies...)
+			mu.Unlock()
+			return nil
+		})
 	}
 
+	_ = g.Wait()
 	return allProxies, nil
 }
